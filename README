@@ -14,11 +14,12 @@ has been put together in good faith, if you run this on your scope, note that yo
 
 * How to try this
 
- - Download the release archive and unzip the contents to
-   an USB stick. Archive is here: https://bla
- - Insert USB stick into scope
- - Connect your MSO5000-series scope to an Ethernet network and configure it to get an IP.
- - Using putty or ssh, connect to the scope. Username is root, and password is root
+ - Download the release archive prboom-mso5k.zip and unzip the contents to
+   an USB stick. Archive is here: 
+   https://github.com/Spritetm/prboom-mso5k/releases/download/v1.0/prboom-mso5k.zip
+ - Insert USB stick into your MSO5000-series scope
+ - Connect the scope to an Ethernet network and configure it to get an IP.
+ - Using putty or ssh, connect to the IP of the scope. Username is root, and password is root
    for 01.01.02.03 firmware, Rigol201 for 01.01.02.04 firmwares.
  - Run Doom by entering:
 cd /media/sda1
