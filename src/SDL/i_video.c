@@ -91,7 +91,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
+#include <errno.h>
 
 //e6y: new mouse code
 static SDL_Cursor* cursors[2] = {NULL, NULL};
@@ -139,6 +139,116 @@ extern int     usemouse;        // config file var
 static dboolean mouse_enabled; // usemouse, but can be overriden by -nomouse
 
 int I_GetModeFromString(const char *modestr);
+
+
+/// MSO5K input handling
+//MSO5K front panel sends a string of 16 bytes; the first always is 0xAA and the following 12 or so
+//contain key and rotary input readouts. This code converts them into Doom events.
+
+#define IN_KEY 1	//input is key
+#define IN_ROT_L 2	//input is rotary knob, turned left
+#define IN_ROT_R 3	//input is rotary knob, turned right
+
+typedef struct {
+	int type;
+	int byte;
+	uint8_t shift;
+	int key;
+} mso5k_evt_trans_t;
+
+//Translation table between offsets in the 16-bit string gotten from the MSO5K front panel
+//and the Doom keycodes.
+static mso5k_evt_trans_t mso5k_evt_trans[]={
+	IN_KEY, 11, 1, SDLK_w, //search
+	IN_KEY, 2, 1, SDLK_s, //nav stop
+	IN_KEY, 4, 5, KEYD_LEFTARROW, //nav left
+	IN_KEY, 10, 5, KEYD_RIGHTARROW, //nav right
+	IN_KEY, 1, 3, KEYD_ESCAPE, //stop/run
+	IN_KEY, 9, 7, KEYD_ENTER, //single
+	IN_KEY, 7, 3, KEYD_RCTRL, //clear
+	IN_KEY, 4, 3, KEYD_SPACEBAR, //auto
+	IN_KEY, 4, 4, KEYD_TAB, //measure
+	IN_KEY, 2, 0, KEYD_BACKSPACE, //aquire
+	IN_KEY, 11, 0, KEYD_PAUSE, //storage
+	IN_ROT_L, 8, 6, KEYD_MWHEELUP, //multi-function knob
+	IN_ROT_R, 8, 6, KEYD_MWHEELDOWN, //multi-function knob
+	IN_ROT_L, 4, 0, KEYD_UPARROW, //trigger knob
+	IN_ROT_R, 4, 0, KEYD_DOWNARROW, //trigger knob
+	0,0,0
+};
+
+//The rotary knobs go [1, 0, 2, 3, 1, 0, 2, 3, ...] when turned. These two arrays give the
+//next value for the previous value as the index, when turned in the indicated direction
+static int rot_shift_l[4]={1,3,0,2};
+static int rot_shift_r[4]={2,0,3,1};
+
+static int mso5k_kb_fd;	//serial port fd
+static uint8_t mso5k_kb_buf[16]={0};	//currently receiving buffer
+static uint8_t mso5k_kb_buf_old[16]={0};	//old buffer
+static int mso5k_kb_buf_pos=0; //byte position in the buffer where we're currently receiving
+
+static void init_mso5k_kb() {
+	//Note, this serial port receives at 1MBaud. The Rigol app already configures this. If we ever
+	//want to run standalone, we should do that ourselves.
+	mso5k_kb_fd=open("/dev/ttyPS1", O_RDONLY|O_NONBLOCK);
+}
+
+//If mso5k_kb_buf contains an entire event string, this is called.
+static void handle_mso5k_buf() {
+	mso5k_evt_trans_t *e=mso5k_evt_trans;
+	//Iterate over all possible events and see if they happened.
+	while (e->type!=0) {
+		uint8_t newb=mso5k_kb_buf[e->byte&15]>>e->shift;
+		uint8_t oldb=mso5k_kb_buf_old[e->byte&15]>>e->shift;
+		if (e->type==IN_KEY) {
+			newb&=1; oldb&=1;
+			if (newb!=oldb) {
+				event_t event;
+				event.type = newb?ev_keyup:ev_keydown;
+				event.data1 = e->key;
+				D_PostEvent(&event);
+			}
+		} else {
+			//rotary left or right
+			newb&=3; oldb&=3;
+			if ((e->type==IN_ROT_L && newb==rot_shift_l[oldb]) || (e->type==IN_ROT_R && newb==rot_shift_r[oldb]) ) {
+				event_t event;
+				event.type = ev_keydown;
+				event.data1 = e->key;
+				D_PostEvent(&event);
+				event.type = ev_keyup;
+				D_PostEvent(&event);
+			}
+		}
+		e++; //next possible event
+	}
+	//set old buffer
+	memcpy(mso5k_kb_buf_old, mso5k_kb_buf, 16);
+}
+
+//Try to read an event from the serial port.
+static void handle_mso5k_events() {
+	while(1) {
+		int r=read(mso5k_kb_fd, &mso5k_kb_buf[mso5k_kb_buf_pos], 1);
+		if (r==-1) {
+			//No more serial data
+			return;
+		}
+		if (mso5k_kb_buf_pos==0) {
+			//check sync byte
+			if (mso5k_kb_buf[0]==0xaa) mso5k_kb_buf_pos++;
+		} else if (mso5k_kb_buf_pos==15) {
+			//Full buffer received
+			handle_mso5k_buf();
+			//Prepare for new buffer.
+			mso5k_kb_buf_pos=0;
+			mso5k_kb_buf[0]=0;
+		} else {
+			mso5k_kb_buf_pos++;
+		}
+	}
+}
+
 
 /////////////////////////////////////////////////////////////////////////////////
 // Keyboard handling
@@ -231,6 +341,7 @@ int I_SDLtoDoomMouseState(Uint8 buttonstate)
       ;
 }
 
+
 static void I_GetEvent(void)
 {
   event_t event;
@@ -239,6 +350,8 @@ static void I_GetEvent(void)
   SDL_Event *Event = &SDLEvent;
 
   static int mwheeluptic = 0, mwheeldowntic = 0;
+
+  handle_mso5k_events();
 
 while (SDL_PollEvent(Event))
 {
@@ -400,6 +513,7 @@ static void I_InitInputs(void)
   }
 
   I_InitJoystick();
+  init_mso5k_kb();
 }
 /////////////////////////////////////////////////////////////////////////////
 
