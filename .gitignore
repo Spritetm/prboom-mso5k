@@ -8,3 +8,4 @@ data/*.wad
 data/rdatawad
 src/prboom-plus
 stamp-h1
+config.h

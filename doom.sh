@@ -1,0 +1,2 @@
+killall appEntry
+./prboom-plus
