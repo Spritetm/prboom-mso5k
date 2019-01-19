@@ -1,0 +1,10 @@
+.deps
+Makefile
+config.log
+config.status
+data/*.wad
+*.o
+*.a
+data/rdatawad
+src/prboom-plus
+stamp-h1

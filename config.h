@@ -12,10 +12,10 @@
 #define DOGS 1
 
 /* Define to be the path where Doom WADs are stored */
-#define DOOMWADDIR "/usr/local/share/games/doom"
+#define DOOMWADDIR "."
 
 /* Define if you are building with OpenGL support */
-#define GL_DOOM 1
+/* #undef GL_DOOM */
 
 /* Define to 1 if you have the <asm/byteorder.h> header file. */
 #define HAVE_ASM_BYTEORDER_H 1
@@ -58,7 +58,7 @@
 /* #undef HAVE_LIBPCREPOSIX */
 
 /* Define to 1 if you have the `png' library (-lpng). */
-#define HAVE_LIBPNG 1
+/* #undef HAVE_LIBPNG */
 
 /* Define to 1 if you have the `portmidi' library (-lportmidi). */
 /* #undef HAVE_LIBPORTMIDI */
@@ -180,13 +180,13 @@
 /* #undef TIMEDIAG */
 
 /* Define if you want to use gluImageScale */
-#define USE_GLU_IMAGESCALE 1
+/* #undef USE_GLU_IMAGESCALE */
 
 /* Define if you want to use gluBuild2DMipmaps */
-#define USE_GLU_MIPMAP 1
+/* #undef USE_GLU_MIPMAP */
 
 /* Define if you want to use the gluTesselator */
-#define USE_GLU_TESS 1
+/* #undef USE_GLU_TESS */
 
 /* Define if you want to use the SDL net lib */
 /* #undef USE_SDL_NET */

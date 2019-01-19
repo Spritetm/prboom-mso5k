@@ -86,6 +86,13 @@
 #include "e6y.h"//e6y
 #include "i_main.h"
 
+#include <sys/ioctl.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+
 //e6y: new mouse code
 static SDL_Cursor* cursors[2] = {NULL, NULL};
 
@@ -117,6 +124,7 @@ int use_doublebuffer = 1; // Included not to break m_misc, but not relevant to S
 int use_fullscreen;
 int desired_fullscreen;
 SDL_Surface *screen;
+SDL_Surface *mso5k_fb;
 #ifdef GL_DOOM
 vid_8ingl_t vid_8ingl;
 int use_gl_surface;
@@ -589,6 +597,7 @@ void I_FinishUpdate (void)
   else
 #endif
   {
+    SDL_BlitSurface(screen, NULL, mso5k_fb, NULL);
     SDL_Flip(screen);
   }
 }
@@ -616,7 +625,8 @@ static void I_ShutdownSDL(void)
 void I_PreInitGraphics(void)
 {
   int p;
-  char *video_driver = strdup(sdl_videodriver);
+  //mso5k abuses fbcon driver
+  char *video_driver = strdup("fbcon");
 
   // Initialize SDL
   unsigned int flags = 0;
@@ -710,9 +720,11 @@ void I_GetScreenResolution(void)
 {
   int width, height;
 
-  desired_screenwidth = 640;
-  desired_screenheight = 480;
+  //default to mso5k resolution
+  desired_screenwidth = 1024;
+  desired_screenheight = 600;
 
+/*
   if (screen_resolution)
   {
     if (sscanf(screen_resolution, "%dx%d", &width, &height) == 2)
@@ -721,6 +733,7 @@ void I_GetScreenResolution(void)
       desired_screenheight = height;
     }
   }
+*/
 }
 
 //
@@ -1075,7 +1088,8 @@ void I_InitScreenResolution(void)
   {
     mode = I_GetModeFromString(myargv[i+1]);
   }
-  
+  //mso5k: always 16-bit
+  mode=VID_MODE16;
   V_InitMode(mode);
 
   I_CalculateRes(w, h);
@@ -1337,7 +1351,23 @@ void I_UpdateVideoMode(void)
     else
 #endif
     {
-      screen = SDL_SetVideoMode(REAL_SCREENWIDTH, REAL_SCREENHEIGHT, V_GetNumPixelBits(), init_flags);
+      //screen is used to build up the Doom image; do that offscreen and blit to fb later
+      screen = SDL_CreateRGBSurface(0, 1024, 600, V_GetNumPixelBits(), 0, 0, 0, 0);
+      //On the MSO5K, we need to actually use a framebuffer
+      int f=open("/dev/fb0", O_RDWR);
+      if (!f) {
+        perror("/dev/fb0");
+        exit(1);
+      }
+      ioctl(f, _IOC(0, 0, 0, 0xf00), 3); //use 0, 3 or 5 for the three fbs
+      uint16_t *pixels=mmap(NULL, 1024*600*2, PROT_READ|PROT_WRITE, MAP_SHARED, f, 0);
+      for (int i=0; i<1024*600; i++) pixels[i]=0xf800;
+      mso5k_fb=SDL_CreateRGBSurfaceFrom(pixels, 1024, 600, 16, 1024*2, 0xf800, 0x7e0, 0x001f, 0);
+//      SCREENWIDTH=1024;
+  //    SCREENHEIGHT=600;
+    //  REAL_SCREENWIDTH=1024;
+     // REAL_SCREENHEIGHT=600;
+	  printf("Bpp %d\n", V_GetNumPixelBits());
     }
   }
 
